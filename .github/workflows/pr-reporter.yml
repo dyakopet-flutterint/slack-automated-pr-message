@@ -54,9 +54,9 @@ jobs:
       
     - name: Run PR Reporter
       env:
-        GITHUB_TOKEN: ${{ vars.GITHUB_TOKEN }}
-        GITHUB_OWNER: ${{ vars.GITHUB_OWNER }}
-        GITHUB_REPO: ${{ vars.GITHUB_REPO }}
+        GITHUB_TOKEN: ${{ vars.TOKEN }}
+        GITHUB_OWNER: ${{ vars.OWNER }}
+        GITHUB_REPO: ${{ vars.REPO }}
         JIRA_URL: ${{ vars.JIRA_URL }}
         JIRA_USERNAME: ${{ vars.JIRA_USERNAME }}
         JIRA_API_TOKEN: ${{ vars.JIRA_API_TOKEN }}
