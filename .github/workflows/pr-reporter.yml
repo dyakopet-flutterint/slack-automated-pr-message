@@ -52,6 +52,34 @@ jobs:
     - name: Build application
       run: go build -o pr-reporter .
       
+    - name: Debug environment variables
+      run: |
+        echo "=== Debugging Environment Variables ==="
+        echo "GITHUB_TOKEN is set: $(if [ -n "$GITHUB_TOKEN" ]; then echo 'YES'; else echo 'NO'; fi)"
+        echo "GITHUB_OWNER is set: $(if [ -n "$GITHUB_OWNER" ]; then echo 'YES'; else echo 'NO'; fi)"
+        echo "GITHUB_REPO is set: $(if [ -n "$GITHUB_REPO" ]; then echo 'YES'; else echo 'NO'; fi)"
+        echo "SLACK_TOKEN is set: $(if [ -n "$SLACK_TOKEN" ]; then echo 'YES'; else echo 'NO'; fi)"
+        echo "JIRA_URL is set: $(if [ -n "$JIRA_URL" ]; then echo 'YES'; else echo 'NO'; fi)"
+        echo "SLACK_CHANNEL is set: $(if [ -n "$SLACK_CHANNEL" ]; then echo 'YES'; else echo 'NO'; fi)"
+        echo "=== Repository Variables ==="
+        echo "TOKEN var: ${{ vars.TOKEN }}"
+        echo "OWNER var: ${{ vars.OWNER }}"
+        echo "REPO var: ${{ vars.REPO }}"
+        echo "SLACK_TOKEN var: ${{ vars.SLACK_TOKEN }}"
+        echo "========================================="
+      env:
+        GITHUB_TOKEN: ${{ vars.TOKEN }}
+        GITHUB_OWNER: ${{ vars.OWNER }}
+        GITHUB_REPO: ${{ vars.REPO }}
+        JIRA_URL: ${{ vars.JIRA_URL }}
+        JIRA_USERNAME: ${{ vars.JIRA_USERNAME }}
+        JIRA_API_TOKEN: ${{ vars.JIRA_API_TOKEN }}
+        SLACK_TOKEN: ${{ vars.SLACK_TOKEN }}
+        SLACK_CHANNEL: ${{ vars.SLACK_CHANNEL }}
+        TEAM_GROUP: ${{ vars.TEAM_GROUP }}
+        USER_MAPPING: ${{ vars.USER_MAPPING }}
+        DEBUG: ${{ vars.DEBUG }}
+      
     - name: Run PR Reporter
       env:
         GITHUB_TOKEN: ${{ vars.TOKEN }}
