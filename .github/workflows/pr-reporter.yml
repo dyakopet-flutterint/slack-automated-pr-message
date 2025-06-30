@@ -30,9 +30,23 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-go-
           
+    - name: Initialize Go modules
+      run: |
+        if [ ! -f go.mod ]; then
+          echo "go.mod not found, initializing..."
+          go mod init pr-reporter
+        fi
+        
     - name: Install dependencies
       run: |
-        go mod download
+        echo "Installing required dependencies..."
+        go get github.com/andygrunwald/go-jira@v1.16.0
+        go get github.com/google/go-github/v45@v45.2.0
+        go get github.com/joho/godotenv@v1.4.0
+        go get github.com/robfig/cron/v3@v3.0.1
+        go get github.com/slack-go/slack@v0.12.3
+        go get golang.org/x/oauth2@v0.15.0
+        go mod tidy
         go mod verify
         
     - name: Build application
