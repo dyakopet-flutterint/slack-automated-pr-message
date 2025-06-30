@@ -12,6 +12,7 @@ on:
 jobs:
   run-pr-reporter:
     runs-on: ubuntu-latest
+    environment: main  # Use the 'main' environment
     
     steps:
     - name: Checkout repository
@@ -61,7 +62,7 @@ jobs:
         echo "SLACK_TOKEN is set: $(if [ -n "$SLACK_TOKEN" ]; then echo 'YES'; else echo 'NO'; fi)"
         echo "JIRA_URL is set: $(if [ -n "$JIRA_URL" ]; then echo 'YES'; else echo 'NO'; fi)"
         echo "SLACK_CHANNEL is set: $(if [ -n "$SLACK_CHANNEL" ]; then echo 'YES'; else echo 'NO'; fi)"
-        echo "=== Repository Variables ==="
+        echo "=== Environment Variables from 'main' environment ==="
         echo "TOKEN var: ${{ vars.TOKEN }}"
         echo "OWNER var: ${{ vars.OWNER }}"
         echo "REPO var: ${{ vars.REPO }}"
