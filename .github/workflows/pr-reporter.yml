@@ -2,8 +2,9 @@ name: PR Reporter Daily
 
 on:
   schedule:
-    # Runs every weekday at 9:00 AM UTC (adjust timezone as needed)
-    - cron: '0 9 * * 1-5'
+    # Runs every weekday at 9:00 AM Sofia, Bulgaria time (EEST UTC+3)
+    # 9:00 AM EEST = 6:00 AM UTC
+    - cron: '0 6 * * 1-5'
   
   # Allows manual triggering of the workflow
   workflow_dispatch:
@@ -22,7 +23,7 @@ jobs:
         go-version: '1.19'
         
     - name: Cache Go modules
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       with:
         path: ~/go/pkg/mod
         key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
@@ -39,22 +40,22 @@ jobs:
       
     - name: Run PR Reporter
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        GITHUB_OWNER: ${{ secrets.GITHUB_OWNER }}
-        GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
-        JIRA_URL: ${{ secrets.JIRA_URL }}
-        JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
-        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
-        SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
-        TEAM_GROUP: ${{ secrets.TEAM_GROUP }}
-        USER_MAPPING: ${{ secrets.USER_MAPPING }}
-        DEBUG: ${{ secrets.DEBUG }}
+        GITHUB_TOKEN: ${{ vars.GITHUB_TOKEN }}
+        GITHUB_OWNER: ${{ vars.GITHUB_OWNER }}
+        GITHUB_REPO: ${{ vars.GITHUB_REPO }}
+        JIRA_URL: ${{ vars.JIRA_URL }}
+        JIRA_USERNAME: ${{ vars.JIRA_USERNAME }}
+        JIRA_API_TOKEN: ${{ vars.JIRA_API_TOKEN }}
+        SLACK_TOKEN: ${{ vars.SLACK_TOKEN }}
+        SLACK_CHANNEL: ${{ vars.SLACK_CHANNEL }}
+        TEAM_GROUP: ${{ vars.TEAM_GROUP }}
+        USER_MAPPING: ${{ vars.USER_MAPPING }}
+        DEBUG: ${{ vars.DEBUG }}
       run: ./pr-reporter --run-now
       
     - name: Upload logs on failure
       if: failure()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pr-reporter-logs
         path: |
