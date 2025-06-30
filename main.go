@@ -56,9 +56,9 @@ type PullRequestInfo struct {
 // LoadConfig loads configuration from environment variables
 func LoadConfig() (*Config, error) {
 	config := &Config{
-		GithubToken:   os.Getenv("GITHUB_TOKEN"),
-		GithubOwner:   os.Getenv("GITHUB_OWNER"),
-		GithubRepo:    os.Getenv("GITHUB_REPO"),
+		GithubToken:   os.Getenv("TOKEN"),
+		GithubOwner:   os.Getenv("OWNER"),
+		GithubRepo:    os.Getenv("REPO"),
 		JiraURL:       os.Getenv("JIRA_URL"),
 		JiraUsername:  os.Getenv("JIRA_USERNAME"),
 		JiraAPIToken:  os.Getenv("JIRA_API_TOKEN"),

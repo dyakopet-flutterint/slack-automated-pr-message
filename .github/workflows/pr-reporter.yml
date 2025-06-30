@@ -1,0 +1,63 @@
+name: PR Reporter Daily
+
+on:
+  schedule:
+    # Runs every weekday at 9:00 AM UTC (adjust timezone as needed)
+    - cron: '0 9 * * 1-5'
+  
+  # Allows manual triggering of the workflow
+  workflow_dispatch:
+
+jobs:
+  run-pr-reporter:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Go
+      uses: actions/setup-go@v4
+      with:
+        go-version: '1.19'
+        
+    - name: Cache Go modules
+      uses: actions/cache@v3
+      with:
+        path: ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
+          
+    - name: Install dependencies
+      run: |
+        go mod download
+        go mod verify
+        
+    - name: Build application
+      run: go build -o pr-reporter .
+      
+    - name: Run PR Reporter
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_OWNER: ${{ secrets.GITHUB_OWNER }}
+        GITHUB_REPO: ${{ secrets.GITHUB_REPO }}
+        JIRA_URL: ${{ secrets.JIRA_URL }}
+        JIRA_USERNAME: ${{ secrets.JIRA_USERNAME }}
+        JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
+        SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
+        SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+        TEAM_GROUP: ${{ secrets.TEAM_GROUP }}
+        USER_MAPPING: ${{ secrets.USER_MAPPING }}
+        DEBUG: ${{ secrets.DEBUG }}
+      run: ./pr-reporter --run-now
+      
+    - name: Upload logs on failure
+      if: failure()
+      uses: actions/upload-artifact@v3
+      with:
+        name: pr-reporter-logs
+        path: |
+          *.log
+          /tmp/*.log
+        retention-days: 7
