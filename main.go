@@ -29,13 +29,14 @@ type Config struct {
 	JiraURL       string
 	JiraUsername  string
 	JiraAPIToken  string
+	JiraUsePAT    bool
 	
 	// Slack configuration
 	SlackToken    string
 	SlackChannel  string
 	TeamGroup     string
 	
-	// User mapping (optional) - format: "slack_user:github_user,slack_user2:github_user2"
+	// User mapping (optional) - format: "slack_user_id:github_user,slack_user_id2:github_user2"
 	UserMapping   map[string]string
 }
 
@@ -66,19 +67,20 @@ func LoadConfig() (*Config, error) {
 		SlackChannel:  os.Getenv("SLACK_CHANNEL"),
 		TeamGroup:     os.Getenv("TEAM_GROUP"),
 		DebugMode:     strings.ToLower(os.Getenv("DEBUG")) == "true",
+		JiraUsePAT:    strings.ToLower(os.Getenv("JIRA_USE_PAT")) == "true",
 		UserMapping:   make(map[string]string),
 	}
 	
-	// Parse user mapping if provided (format: "slack_user:github_user,slack_user2:github_user2")
+	// Parse user mapping if provided (format: "slack_user_id:github_user,slack_user_id2:github_user2")
 	userMappingStr := os.Getenv("USER_MAPPING")
 	if userMappingStr != "" {
 		pairs := strings.Split(userMappingStr, ",")
 		for _, pair := range pairs {
 			parts := strings.Split(strings.TrimSpace(pair), ":")
 			if len(parts) == 2 {
-				slackUser := strings.TrimSpace(parts[0])
+				slackUserID := strings.TrimSpace(parts[0])
 				githubUser := strings.TrimSpace(parts[1])
-				config.UserMapping[slackUser] = githubUser
+				config.UserMapping[slackUserID] = githubUser
 			}
 		}
 	}
@@ -197,7 +199,7 @@ func GetSlackChannelUsers(config *Config) ([]string, map[string]string, error) {
 	
 	// Get user info for each member to get their usernames and IDs
 	var allowedUsers []string
-	slackUserMap := make(map[string]string) // username -> user ID for proper mentions
+	slackUserMap := make(map[string]string) // user ID -> user ID for proper mentions
 	
 	for _, memberID := range members {
 		user, err := api.GetUserInfo(memberID)
@@ -216,22 +218,21 @@ func GetSlackChannelUsers(config *Config) ([]string, map[string]string, error) {
 			continue
 		}
 		
-		// Store the mapping of Slack username to user ID for mentions
-		slackUserMap[user.Name] = user.ID
+		// Store the mapping of Slack user ID to user ID for mentions
+		slackUserMap[user.ID] = user.ID
 		
-		// Check if there's a mapping for this Slack user to a GitHub user
-		githubUser := user.Name // Default to Slack username
-		if mappedUser, exists := config.UserMapping[user.Name]; exists {
-			githubUser = mappedUser
+		// Check if there's a mapping for this Slack user ID to a GitHub user
+		if mappedUser, exists := config.UserMapping[user.ID]; exists {
+			githubUser := mappedUser
+			allowedUsers = append(allowedUsers, githubUser)
 			if config.DebugMode {
-				log.Printf("Debug: Mapped Slack user %s to GitHub user %s", user.Name, githubUser)
+				log.Printf("Debug: Mapped Slack user ID %s to GitHub user %s - added to allowed list", user.ID, githubUser)
 			}
-		}
-		
-		allowedUsers = append(allowedUsers, githubUser)
-		
-		if config.DebugMode {
-			log.Printf("Debug: Added user to allowed list: %s (Slack: %s, ID: %s)", githubUser, user.Name, user.ID)
+		} else {
+			// No mapping found - skip this user or warn
+			if config.DebugMode {
+				log.Printf("Debug: No mapping found for Slack user ID %s (username: %s) - skipping", user.ID, user.Name)
+			}
 		}
 	}
 	
@@ -256,14 +257,14 @@ func FetchPullRequests(config *Config) ([]*PullRequestInfo, error) {
 		return []*PullRequestInfo{}, nil
 	}
 	
-	// Create reverse mapping: GitHub username -> Slack username
+	// Create reverse mapping: GitHub username -> Slack user ID
 	githubToSlackMap := make(map[string]string)
-	for slackUser, githubUser := range config.UserMapping {
-		githubToSlackMap[githubUser] = slackUser
+	for slackUserID, githubUser := range config.UserMapping {
+		githubToSlackMap[githubUser] = slackUserID
 	}
 	
 	if config.DebugMode {
-		log.Printf("Debug: GitHub to Slack reverse mapping: %v", githubToSlackMap)
+		log.Printf("Debug: GitHub to Slack user ID reverse mapping: %v", githubToSlackMap)
 	}
 	
 	ctx := context.Background()
@@ -301,8 +302,8 @@ func FetchPullRequests(config *Config) ([]*PullRequestInfo, error) {
 	
 	var filteredPRs []*PullRequestInfo
 	
-	// Regex to extract JIRA ticket
-	jiraRegex := regexp.MustCompile(`SCRUM-\d+`)
+	// Regex to extract JIRA ticket (matches POKER-#### format)
+	jiraRegex := regexp.MustCompile(`POKER-\d+`)
 	
 	for _, pr := range allPRs {
 		// Debug PR info
@@ -349,12 +350,12 @@ func FetchPullRequests(config *Config) ([]*PullRequestInfo, error) {
 			continue
 		}
 		
-		// Check for "Poker" label (case insensitive)
+		// Check for "Poker" label (case insensitive - matches labels containing "Poker")
 		hasPokerLabel := false
 		for _, label := range pr.Labels {
 			if label.Name != nil {
-				// Make the check case-insensitive
-				if strings.EqualFold(*label.Name, "Poker") {
+				// Check if label contains "Poker" (case-insensitive)
+				if strings.Contains(strings.ToLower(*label.Name), "poker") {
 					hasPokerLabel = true
 					if config.DebugMode {
 						log.Printf("Debug: PR #%d has matching label: %s", *pr.Number, *label.Name)
@@ -389,33 +390,25 @@ func FetchPullRequests(config *Config) ([]*PullRequestInfo, error) {
 		if pr.Assignee != nil && pr.Assignee.Login != nil {
 			githubUsername := *pr.Assignee.Login
 			
-			// Check if we have a mapping from GitHub username to Slack username
-			if slackUsername, exists := githubToSlackMap[githubUsername]; exists {
+			// Check if we have a mapping from GitHub username to Slack user ID
+			if slackUserID, exists := githubToSlackMap[githubUsername]; exists {
 				// Use proper Slack mention format with user ID
-				if userID, userExists := slackUserMap[slackUsername]; userExists {
-					assignee = fmt.Sprintf("<@%s>", userID)
-					if config.DebugMode {
-						log.Printf("Debug: PR #%d assignee mapped from GitHub user %s to Slack mention <@%s> (user: %s)", *pr.Number, githubUsername, userID, slackUsername)
-					}
-				} else {
-					// Fallback to @username if ID not found
-					assignee = "@" + slackUsername
-					if config.DebugMode {
-						log.Printf("Debug: PR #%d assignee using @%s (user ID not found)", *pr.Number, slackUsername)
-					}
+				assignee = fmt.Sprintf("<@%s>", slackUserID)
+				if config.DebugMode {
+					log.Printf("Debug: PR #%d assignee mapped from GitHub user %s to Slack mention <@%s>", *pr.Number, githubUsername, slackUserID)
 				}
 			} else {
-				// No mapping found, check if GitHub username matches a Slack username directly
+				// No mapping found, check if GitHub username matches a Slack user ID directly (unlikely but fallback)
 				if userID, userExists := slackUserMap[githubUsername]; userExists {
 					assignee = fmt.Sprintf("<@%s>", userID)
 					if config.DebugMode {
-						log.Printf("Debug: PR #%d assignee using direct match <@%s> (user: %s)", *pr.Number, userID, githubUsername)
+						log.Printf("Debug: PR #%d assignee using direct match <@%s>", *pr.Number, userID)
 					}
 				} else {
 					// Fallback to GitHub username
 					assignee = "@" + githubUsername
 					if config.DebugMode {
-						log.Printf("Debug: PR #%d assignee using GitHub username @%s (no Slack user found)", *pr.Number, githubUsername)
+						log.Printf("Debug: PR #%d assignee using GitHub username @%s (no Slack user mapping found)", *pr.Number, githubUsername)
 					}
 				}
 			}
@@ -469,17 +462,44 @@ func UpdateJiraInfo(config *Config, prs []*PullRequestInfo) error {
 	
 	if config.DebugMode {
 		log.Printf("Debug: Initializing JIRA client for %s", config.JiraURL)
+		log.Printf("Debug: Using PAT authentication: %v", config.JiraUsePAT)
 	}
 	
-	tp := jira.BasicAuthTransport{
-		Username: config.JiraUsername,
-		Password: config.JiraAPIToken,
-	}
-	
-	jiraClient, err := jira.NewClient(tp.Client(), config.JiraURL)
-	if err != nil {
-		log.Printf("Error creating JIRA client: %v", err)
-		return nil // Don't fail the entire process, just skip JIRA updates
+	// Create JIRA client with appropriate authentication
+	var jiraClient *jira.Client
+	if config.JiraUsePAT {
+		// Use Personal Access Token (PAT) authentication
+		if config.DebugMode {
+			log.Println("Debug: Using JIRA Personal Access Token authentication")
+		}
+		
+		tp := jira.PATAuthTransport{
+			Token: config.JiraAPIToken,
+		}
+		
+		var err error
+		jiraClient, err = jira.NewClient(tp.Client(), config.JiraURL)
+		if err != nil {
+			log.Printf("Error creating JIRA client with PAT: %v", err)
+			return nil // Don't fail the entire process, just skip JIRA updates
+		}
+	} else {
+		// Use Basic authentication (email + API token)
+		if config.DebugMode {
+			log.Println("Debug: Using JIRA Basic authentication (email + API token)")
+		}
+		
+		tp := jira.BasicAuthTransport{
+			Username: config.JiraUsername,
+			Password: config.JiraAPIToken,
+		}
+		
+		var err error
+		jiraClient, err = jira.NewClient(tp.Client(), config.JiraURL)
+		if err != nil {
+			log.Printf("Error creating JIRA client with Basic auth: %v", err)
+			return nil // Don't fail the entire process, just skip JIRA updates
+		}
 	}
 	
 	// Test JIRA connection in debug mode
