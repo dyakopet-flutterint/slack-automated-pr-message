@@ -90,7 +90,7 @@ jobs:
         JIRA_URL: ${{ vars.JIRA_URL }}
         JIRA_USERNAME: ${{ vars.JIRA_USERNAME }}
         JIRA_API_TOKEN: ${{ secrets.JIRA_API_TOKEN }}
-        JIRA_USE_PAT: ${{ JIRA_USE_PAT }}
+        JIRA_USE_PAT: ${{ vars.JIRA_USE_PAT }}
         SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
         SLACK_CHANNEL: ${{ vars.SLACK_CHANNEL }}
         TEAM_GROUP: ${{ vars.TEAM_GROUP }}
