@@ -69,7 +69,7 @@ jobs:
         echo "REPO var: ${{ vars.REPO }}"
         echo "========================================="
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.TOKEN }}
         GITHUB_OWNER: ${{ vars.OWNER }}
         GITHUB_REPO: ${{ vars.REPO }}
         JIRA_URL: ${{ vars.JIRA_URL }}
@@ -84,7 +84,7 @@ jobs:
       
     - name: Run PR Reporter
       env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        GITHUB_TOKEN: ${{ secrets.TOKEN }}
         GITHUB_OWNER: ${{ vars.OWNER }}
         GITHUB_REPO: ${{ vars.REPO }}
         JIRA_URL: ${{ vars.JIRA_URL }}
