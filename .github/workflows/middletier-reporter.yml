@@ -79,6 +79,7 @@ jobs:
         SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
         SLACK_CHANNEL: ${{ vars.SLACK_CHANNEL }}
         TEAM_GROUP: ${{ vars.TEAM_GROUP }}
+        MIDDLETIER_MENTION_USERS: ${{ vars.MIDDLETIER_MENTION_USERS }}
         USER_MAPPING: ${{ vars.USER_MAPPING }}
         DEBUG: ${{ vars.DEBUG }}
       
@@ -94,6 +95,7 @@ jobs:
         SLACK_TOKEN: ${{ secrets.SLACK_TOKEN }}
         SLACK_CHANNEL: ${{ vars.SLACK_CHANNEL }}
         TEAM_GROUP: ${{ vars.TEAM_GROUP }}
+        MIDDLETIER_MENTION_USERS: ${{ vars.MIDDLETIER_MENTION_USERS }}
         USER_MAPPING: ${{ vars.USER_MAPPING }}
         DEBUG: ${{ vars.DEBUG }}
       run: ./pr-reporter
