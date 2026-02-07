@@ -2,6 +2,28 @@
 
 A comprehensive Golang-based automation tool that monitors GitHub pull requests, integrates with JIRA for ticket status tracking, and sends daily reports to Slack channels. Designed to streamline development team workflows by providing automated visibility into open pull requests and their associated JIRA task statuses.
 
+## � Project Structure
+
+```
+pr-reporter/
+├── cmd/                    # Application entry points
+│   ├── frontend/          # Frontend PR report
+│   │   └── main.go
+│   └── middletier/        # Middletier PR report
+│       └── main.go
+├── internal/              # Private application packages
+│   ├── github/           # GitHub API integration
+│   │   └── github.go
+│   ├── jira/             # JIRA API integration
+│   │   └── jira.go
+│   └── slack/            # Slack API integration
+│       └── slack.go
+├── .env                   # Environment configuration
+├── go.mod                 # Go module definition
+├── go.sum                 # Go dependencies
+└── README.md              # Documentation
+```
+
 ## 🛠️ Installation
 
 ### 1. Clone the Repository
@@ -11,28 +33,20 @@ git clone <repository-url>
 cd pr-reporter
 ```
 
-### 2. Initialize Go Module
+### 2. Install Dependencies
 
 ```bash
-go mod init pr-reporter
-go mod tidy
+go mod download
 ```
 
-### 3. Install Dependencies
+### 3. Build the Applications
 
 ```bash
-go get github.com/google/go-github/v45/github
-go get github.com/andygrunwald/go-jira
-go get github.com/slack-go/slack
-go get github.com/robfig/cron/v3
-go get golang.org/x/oauth2
-go get github.com/joho/godotenv
-```
+# Build frontend reporter
+go build -o bin/frontend cmd/frontend/main.go
 
-### 4. Build the Application
-
-```bash
-go build
+# Build middletier reporter
+go build -o bin/middletier cmd/middletier/main.go
 ```
 
 ## ⚙️ Configuration
@@ -42,10 +56,12 @@ go build
 Create a `.env` file in the project root:
 
 ```env
+# Debug Mode
+DEBUG=true
+
 # GitHub Configuration
 GITHUB_TOKEN=your_github_personal_access_token
 GITHUB_OWNER=your_github_organization_or_username
-GITHUB_REPO=your_repository_name
 
 # JIRA Configuration
 JIRA_URL=https://your-company.atlassian.net
