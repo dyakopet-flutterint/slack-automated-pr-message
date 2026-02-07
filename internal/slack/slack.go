@@ -19,6 +19,8 @@ type MessageOptions struct {
 	TeamGroup    string // Slack team group ID to mention (optional)
 	MentionUsers string // Comma-separated Slack user IDs to mention (alternative to TeamGroup)
 	ReportTitle  string // Optional title for the report (e.g., "Frontend Report")
+	ShowAssignee bool   // Whether to show assignee in PR line (default: true)
+	UseCheckmark bool   // Whether to use checkmark emoji for no blocked/draft (default: true, false = memo emoji)
 	DebugMode    bool   // Enable debug logging
 }
 
@@ -119,16 +121,29 @@ func SendPRReport(opts MessageOptions, prs []*PRInfo) error {
 		}
 
 		// Format the PR line
-		prLine := fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* assigned to %s | Jira: %s | %s | *%s*",
-			i+1,
-			opts.GithubOwner,
-			opts.GithubRepo,
-			pr.Number,
-			pr.Number,
-			assigneeText,
-			jiraLink,
-			description,
-			statusPart)
+		var prLine string
+		if opts.ShowAssignee {
+			prLine = fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* assigned to %s | Jira: %s | %s | *%s*",
+				i+1,
+				opts.GithubOwner,
+				opts.GithubRepo,
+				pr.Number,
+				pr.Number,
+				assigneeText,
+				jiraLink,
+				description,
+				statusPart)
+		} else {
+			prLine = fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* | Jira: %s | %s | *%s*",
+				i+1,
+				opts.GithubOwner,
+				opts.GithubRepo,
+				pr.Number,
+				pr.Number,
+				jiraLink,
+				description,
+				statusPart)
+		}
 
 		lines = append(lines, prLine)
 	}
@@ -144,7 +159,12 @@ func SendPRReport(opts MessageOptions, prs []*PRInfo) error {
 			lines = append(lines, fmt.Sprintf("📝 *Draft:* %s", strings.Join(draftPRs, ", ")))
 		}
 	} else {
-		lines = append(lines, "✅ *Blocked/Draft:* N/A")
+		// Use checkmark or memo emoji based on opts.UseCheckmark
+		emoji := "✅"
+		if !opts.UseCheckmark {
+			emoji = "📝"
+		}
+		lines = append(lines, fmt.Sprintf("%s *Blocked/Draft:* N/A", emoji))
 	}
 
 	// Add team mention or individual user mentions if provided

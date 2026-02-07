@@ -147,6 +147,8 @@ func main() {
 		TeamGroup:    os.Getenv("MIDDLETIER_TEAM_GROUP"), // Use separate team group for middletier
 		MentionUsers: os.Getenv("MIDDLETIER_MENTION_USERS"), // Comma-separated Slack user IDs to mention
 		ReportTitle:  "Middletier Report",
+		ShowAssignee: false, // Don't show assignee for middletier
+		UseCheckmark: false, // Use memo emoji instead of checkmark
 		DebugMode:    debugMode,
 	}
 

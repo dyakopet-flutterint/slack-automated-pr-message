@@ -153,14 +153,16 @@ func main() {
 
 	// Build Slack message options
 	slackOpts := slack.MessageOptions{
-		Token:       os.Getenv("SLACK_TOKEN"),
-		Channel:     os.Getenv("SLACK_CHANNEL"),
-		GithubOwner: owner,
-		GithubRepo:  repo,
-		JiraURL:     os.Getenv("JIRA_URL"),
-		TeamGroup:   os.Getenv("TEAM_GROUP"),
-		ReportTitle: "Frontend Report",
-		DebugMode:   debugMode,
+		Token:        os.Getenv("SLACK_TOKEN"),
+		Channel:      os.Getenv("SLACK_CHANNEL"),
+		GithubOwner:  owner,
+		GithubRepo:   repo,
+		JiraURL:      os.Getenv("JIRA_URL"),
+		TeamGroup:    os.Getenv("TEAM_GROUP"),
+		ReportTitle:  "Frontend Report",
+		ShowAssignee: true, // Show assignee for frontend
+		UseCheckmark: true, // Use checkmark emoji
+		DebugMode:    debugMode,
 	}
 
 	log.Printf("Sending Frontend report to Slack channel: %s", slackOpts.Channel)
