@@ -116,7 +116,7 @@ func FetchPRs(opts FetchOptions) ([]*PRResult, error) {
 					continue
 				}
 
-				if strings.EqualFold(allowedUser, *pr.User.Login) {
+				if matchesAllowedUser(allowedUser, *pr.User.Login) {
 					userFound = true
 					if opts.DebugMode {
 						log.Printf("Debug: PR #%d matches allowed user: %s", *pr.Number, allowedUser)
@@ -217,4 +217,22 @@ func FetchPRs(opts FetchOptions) ([]*PRResult, error) {
 	}
 
 	return filteredPRs, nil
+}
+
+func matchesAllowedUser(allowedUser, githubLogin string) bool {
+	allowedUser = strings.TrimSpace(allowedUser)
+	githubLogin = strings.TrimSpace(githubLogin)
+	if allowedUser == "" || githubLogin == "" {
+		return false
+	}
+
+	if strings.EqualFold(allowedUser, githubLogin) {
+		return true
+	}
+
+	allowedLower := strings.ToLower(allowedUser)
+	loginLower := strings.ToLower(githubLogin)
+
+	// Allow a generic "copilot" entry in USER_MAPPING to match the current Copilot bot login.
+	return allowedLower == "copilot" && strings.Contains(loginLower, "copilot")
 }

@@ -3,6 +3,7 @@ package slack
 import (
 	"fmt"
 	"log"
+	"regexp"
 	"strings"
 	"time"
 
@@ -29,6 +30,7 @@ type PRInfo struct {
 	Number      int
 	Title       string
 	Assignee    string // Slack mention format (e.g., "<@U123456>") or GitHub username
+	Author      string // Slack mention format (e.g., "<@U123456>") or GitHub username
 	JiraTicket  string
 	JiraStatus  string
 	Description string
@@ -36,16 +38,42 @@ type PRInfo struct {
 	IsBlocked   bool
 }
 
+// ReportSection represents a repository section in a Slack report.
+type ReportSection struct {
+	Title       string
+	GithubOwner string
+	GithubRepo  string
+	PRs         []*PRInfo
+}
+
 // SendPRReport formats and sends a PR report message to Slack
 func SendPRReport(opts MessageOptions, prs []*PRInfo) error {
+	if opts.GithubOwner == "" || opts.GithubRepo == "" {
+		return fmt.Errorf("GitHub owner and repo are required")
+	}
+
+	return SendPRReportSections(opts, []ReportSection{{
+		GithubOwner: opts.GithubOwner,
+		GithubRepo:  opts.GithubRepo,
+		PRs:         prs,
+	}})
+}
+
+// SendPRReportSections formats and sends a multi-section PR report message to Slack.
+func SendPRReportSections(opts MessageOptions, sections []ReportSection) error {
 	if opts.Token == "" {
 		return fmt.Errorf("Slack token is required")
 	}
 	if opts.Channel == "" {
 		return fmt.Errorf("Slack channel is required")
 	}
-	if opts.GithubOwner == "" || opts.GithubRepo == "" {
-		return fmt.Errorf("GitHub owner and repo are required")
+	if len(sections) == 0 {
+		return fmt.Errorf("at least one report section is required")
+	}
+	for _, section := range sections {
+		if section.GithubOwner == "" || section.GithubRepo == "" {
+			return fmt.Errorf("GitHub owner and repo are required for each section")
+		}
 	}
 
 	api := slack.New(opts.Token)
@@ -61,9 +89,39 @@ func SendPRReport(opts MessageOptions, prs []*PRInfo) error {
 	}
 
 	// Format message with date and total on separate lines with emojis
+	message := buildReportMessage(opts, sections)
+
+	if opts.DebugMode {
+		log.Printf("Debug: Sending message to channel %s", opts.Channel)
+		log.Printf("Debug: Message length: %d characters", len(message))
+	}
+
+	// Send message to Slack
+	_, _, err := api.PostMessage(
+		opts.Channel,
+		slack.MsgOptionText(message, false),
+		slack.MsgOptionAsUser(true),
+	)
+
+	if err != nil {
+		return fmt.Errorf("error posting message to Slack: %v", err)
+	}
+
+	if opts.DebugMode {
+		log.Println("Debug: Message sent successfully")
+	}
+
+	return nil
+}
+
+func buildReportMessage(opts MessageOptions, sections []ReportSection) string {
 	currentDate := time.Now().Format("2006-01-02")
 	dateText := fmt.Sprintf(":date: *%s*", currentDate)
-	totalText := fmt.Sprintf(":bar_chart: *Total Open PRs: %d*", len(prs))
+	totalPRs := 0
+	for _, section := range sections {
+		totalPRs += len(section.PRs)
+	}
+	totalText := fmt.Sprintf(":bar_chart: *Total Open PRs: %d*", totalPRs)
 
 	var lines []string
 
@@ -78,93 +136,111 @@ func SendPRReport(opts MessageOptions, prs []*PRInfo) error {
 	lines = append(lines, totalText)
 	lines = append(lines, "") // Empty line for spacing
 
-	// Track blocked/draft PRs for summary at the end
-	var blockedPRs []string
-	var draftPRs []string
-
-	for i, pr := range prs {
-		statusPart := pr.JiraStatus
-		if statusPart == "" {
-			statusPart = "Unknown"
+	for sectionIndex, section := range sections {
+		if section.Title != "" {
+			lines = append(lines, fmt.Sprintf("*%s*", section.Title))
+			lines = append(lines, fmt.Sprintf(":bar_chart: *Open PRs: %d*", len(section.PRs)))
+			lines = append(lines, "")
 		}
 
-		// Track blocked and draft PRs for end summary with links
-		if pr.IsBlocked && pr.IsDraft {
-			blockedPRs = append(blockedPRs, fmt.Sprintf("<https://github.com/%s/%s/pull/%d|PR-%d> (Blocked & Draft)",
-				opts.GithubOwner, opts.GithubRepo, pr.Number, pr.Number))
-		} else if pr.IsBlocked {
-			blockedPRs = append(blockedPRs, fmt.Sprintf("<https://github.com/%s/%s/pull/%d|PR-%d>",
-				opts.GithubOwner, opts.GithubRepo, pr.Number, pr.Number))
-		} else if pr.IsDraft {
-			draftPRs = append(draftPRs, fmt.Sprintf("<https://github.com/%s/%s/pull/%d|PR-%d>",
-				opts.GithubOwner, opts.GithubRepo, pr.Number, pr.Number))
+		// Track blocked/draft PRs for each section.
+		var blockedPRs []string
+		var draftPRs []string
+
+		for i, pr := range section.PRs {
+			statusPart := pr.JiraStatus
+			if statusPart == "" {
+				statusPart = "Unknown"
+			}
+
+			// Track blocked and draft PRs for end summary with links
+			if pr.IsBlocked && pr.IsDraft {
+				blockedPRs = append(blockedPRs, fmt.Sprintf("<https://github.com/%s/%s/pull/%d|PR-%d> (Blocked & Draft)",
+					section.GithubOwner, section.GithubRepo, pr.Number, pr.Number))
+			} else if pr.IsBlocked {
+				blockedPRs = append(blockedPRs, fmt.Sprintf("<https://github.com/%s/%s/pull/%d|PR-%d>",
+					section.GithubOwner, section.GithubRepo, pr.Number, pr.Number))
+			} else if pr.IsDraft {
+				draftPRs = append(draftPRs, fmt.Sprintf("<https://github.com/%s/%s/pull/%d|PR-%d>",
+					section.GithubOwner, section.GithubRepo, pr.Number, pr.Number))
+			}
+
+			// Prefer assignee when present. For unassigned PRs, show who opened it.
+			userText := pr.Assignee
+			userPrefix := "assigned to"
+			if userText == "" {
+				userText = pr.Author
+				userPrefix = "opened by"
+			}
+			if userText == "" {
+				userText = "unassigned"
+				userPrefix = "assigned to"
+			}
+
+			// Format JIRA ticket link
+			jiraLink := pr.JiraTicket
+			if pr.JiraTicket != "" && opts.JiraURL != "" {
+				jiraLink = fmt.Sprintf("<%s/browse/%s|%s>", opts.JiraURL, pr.JiraTicket, pr.JiraTicket)
+			} else if pr.JiraTicket == "" {
+				jiraLink = "N/A"
+			}
+
+			// Format description
+			description := pr.Description
+			if description == "" {
+				description = "No description"
+			}
+
+			// Format the PR line
+			var prLine string
+			if opts.ShowAssignee {
+				prLine = fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* %s %s | Jira: %s | %s | *%s*",
+					i+1,
+					section.GithubOwner,
+					section.GithubRepo,
+					pr.Number,
+					pr.Number,
+					userPrefix,
+					userText,
+					jiraLink,
+					description,
+					statusPart)
+			} else {
+				prLine = fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* | Jira: %s | %s | *%s*",
+					i+1,
+					section.GithubOwner,
+					section.GithubRepo,
+					pr.Number,
+					pr.Number,
+					jiraLink,
+					description,
+					statusPart)
+			}
+
+			lines = append(lines, prLine)
 		}
 
-		// Format assignee
-		assigneeText := pr.Assignee
-		if assigneeText == "" {
-			assigneeText = "unassigned"
-		}
+		lines = append(lines, "")
 
-		// Format JIRA ticket link
-		jiraLink := pr.JiraTicket
-		if pr.JiraTicket != "" && opts.JiraURL != "" {
-			jiraLink = fmt.Sprintf("<%s/browse/%s|%s>", opts.JiraURL, pr.JiraTicket, pr.JiraTicket)
-		} else if pr.JiraTicket == "" {
-			jiraLink = "N/A"
-		}
-
-		// Format description
-		description := pr.Description
-		if description == "" {
-			description = "No description"
-		}
-
-		// Format the PR line
-		var prLine string
-		if opts.ShowAssignee {
-			prLine = fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* assigned to %s | Jira: %s | %s | *%s*",
-				i+1,
-				opts.GithubOwner,
-				opts.GithubRepo,
-				pr.Number,
-				pr.Number,
-				assigneeText,
-				jiraLink,
-				description,
-				statusPart)
+		if len(blockedPRs) > 0 || len(draftPRs) > 0 {
+			if len(blockedPRs) > 0 {
+				lines = append(lines, fmt.Sprintf("🚫 *Blocked:* %s", strings.Join(blockedPRs, ", ")))
+			}
+			if len(draftPRs) > 0 {
+				lines = append(lines, fmt.Sprintf("📝 *Draft:* %s", strings.Join(draftPRs, ", ")))
+			}
 		} else {
-			prLine = fmt.Sprintf("%d. *<https://github.com/%s/%s/pull/%d|PR-%d>* | Jira: %s | %s | *%s*",
-				i+1,
-				opts.GithubOwner,
-				opts.GithubRepo,
-				pr.Number,
-				pr.Number,
-				jiraLink,
-				description,
-				statusPart)
+			// Use checkmark or memo emoji based on opts.UseCheckmark
+			emoji := "✅"
+			if !opts.UseCheckmark {
+				emoji = "📝"
+			}
+			lines = append(lines, fmt.Sprintf("%s *Blocked/Draft:* N/A", emoji))
 		}
 
-		lines = append(lines, prLine)
-	}
-
-	// Add blocked/draft summary at the end
-	lines = append(lines, "")
-
-	if len(blockedPRs) > 0 || len(draftPRs) > 0 {
-		if len(blockedPRs) > 0 {
-			lines = append(lines, fmt.Sprintf("🚫 *Blocked:* %s", strings.Join(blockedPRs, ", ")))
+		if sectionIndex != len(sections)-1 {
+			lines = append(lines, "")
 		}
-		if len(draftPRs) > 0 {
-			lines = append(lines, fmt.Sprintf("📝 *Draft:* %s", strings.Join(draftPRs, ", ")))
-		}
-	} else {
-		// Use checkmark or memo emoji based on opts.UseCheckmark
-		emoji := "✅"
-		if !opts.UseCheckmark {
-			emoji = "📝"
-		}
-		lines = append(lines, fmt.Sprintf("%s *Blocked/Draft:* N/A", emoji))
 	}
 
 	// Add team mention or individual user mentions if provided
@@ -188,29 +264,7 @@ func SendPRReport(opts MessageOptions, prs []*PRInfo) error {
 		lines = append(lines, fmt.Sprintf("<!subteam^%s> Please make sure to review these pull requests!", opts.TeamGroup))
 	}
 
-	message := strings.Join(lines, "\n")
-
-	if opts.DebugMode {
-		log.Printf("Debug: Sending message to channel %s", opts.Channel)
-		log.Printf("Debug: Message length: %d characters", len(message))
-	}
-
-	// Send message to Slack
-	_, _, err := api.PostMessage(
-		opts.Channel,
-		slack.MsgOptionText(message, false),
-		slack.MsgOptionAsUser(true),
-	)
-
-	if err != nil {
-		return fmt.Errorf("error posting message to Slack: %v", err)
-	}
-
-	if opts.DebugMode {
-		log.Println("Debug: Message sent successfully")
-	}
-
-	return nil
+	return strings.Join(lines, "\n")
 }
 
 // GetChannelUsers fetches the list of users from a specified Slack channel
@@ -321,16 +375,64 @@ func GetChannelUsers(token, channelName string, debugMode bool) ([]string, error
 // MapGitHubUserToMention converts GitHub username to Slack mention format
 // githubToSlackMap: map of GitHub username -> Slack user ID
 // githubUsername: the GitHub username to convert
-// Returns Slack mention format "<@U123456>" or "@githubUsername" if no mapping found
+// Returns Slack mention format "<@U123456>", a plain-text label, or "@githubUsername" if no mapping found
 func MapGitHubUserToMention(githubToSlackMap map[string]string, githubUsername string) string {
 	if githubUsername == "" {
 		return ""
 	}
 
-	if slackUserID, exists := githubToSlackMap[githubUsername]; exists {
-		return fmt.Sprintf("<@%s>", slackUserID)
+	if mappedValue, exists := githubToSlackMap[githubUsername]; exists {
+		mappedValue = strings.TrimSpace(mappedValue)
+		if mappedValue == "" {
+			return githubUsername
+		}
+
+		if strings.HasPrefix(mappedValue, "<@") && strings.HasSuffix(mappedValue, ">") {
+			return mappedValue
+		}
+
+		if regexp.MustCompile(`^[UW][A-Z0-9]+$`).MatchString(mappedValue) {
+			return fmt.Sprintf("<@%s>", mappedValue)
+		}
+
+		return mappedValue
+	}
+
+	for pattern, mappedValue := range githubToSlackMap {
+		if !matchesGitHubUsername(pattern, githubUsername) {
+			continue
+		}
+
+		mappedValue = strings.TrimSpace(mappedValue)
+		if mappedValue == "" {
+			return githubUsername
+		}
+
+		if strings.HasPrefix(mappedValue, "<@") && strings.HasSuffix(mappedValue, ">") {
+			return mappedValue
+		}
+
+		if regexp.MustCompile(`^[UW][A-Z0-9]+$`).MatchString(mappedValue) {
+			return fmt.Sprintf("<@%s>", mappedValue)
+		}
+
+		return mappedValue
 	}
 
 	// Fallback to GitHub username with @ prefix
 	return "@" + githubUsername
+}
+
+func matchesGitHubUsername(pattern, githubUsername string) bool {
+	pattern = strings.TrimSpace(pattern)
+	githubUsername = strings.TrimSpace(githubUsername)
+	if pattern == "" || githubUsername == "" {
+		return false
+	}
+
+	if strings.EqualFold(pattern, githubUsername) {
+		return true
+	}
+
+	return strings.EqualFold(pattern, "copilot") && strings.Contains(strings.ToLower(githubUsername), "copilot")
 }
