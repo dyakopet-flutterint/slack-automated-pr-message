@@ -11,6 +11,7 @@ import (
 	"pr-reporter/internal/slack"
 )
 
+// Test comment.
 func main() {
 	// Load environment variables from .env file
 	err := godotenv.Load()
