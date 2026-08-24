@@ -12,17 +12,18 @@ import (
 
 // MessageOptions contains options for sending a PR report to Slack
 type MessageOptions struct {
-	Token        string // Slack bot token
-	Channel      string // Slack channel to post to (e.g., "#channel-name" or "C1234567890")
-	GithubOwner  string // GitHub repository owner (for PR links)
-	GithubRepo   string // GitHub repository name (for PR links)
-	JiraURL      string // JIRA base URL (for ticket links)
-	TeamGroup    string // Slack team group ID to mention (optional)
-	MentionUsers string // Comma-separated Slack user IDs to mention (alternative to TeamGroup)
-	ReportTitle  string // Optional title for the report (e.g., "Frontend Report")
-	ShowAssignee bool   // Whether to show assignee in PR line (default: true)
-	UseCheckmark bool   // Whether to use checkmark emoji for no blocked/draft (default: true, false = memo emoji)
-	DebugMode    bool   // Enable debug logging
+	Token               string // Slack bot token
+	Channel             string // Slack channel to post to (e.g., "#channel-name" or "C1234567890")
+	GithubOwner         string // GitHub repository owner (for PR links)
+	GithubRepo          string // GitHub repository name (for PR links)
+	JiraURL             string // JIRA base URL (for ticket links)
+	TeamGroup           string // Slack team group ID to mention (optional)
+	MentionUsers        string // Comma-separated Slack user IDs to mention (alternative to TeamGroup)
+	PlainReviewReminder bool   // Whether to add an untagged review reminder
+	ReportTitle         string // Optional title for the report (e.g., "Frontend Report")
+	ShowAssignee        bool   // Whether to show assignee in PR line (default: true)
+	UseCheckmark        bool   // Whether to use checkmark emoji for no blocked/draft (default: true, false = memo emoji)
+	DebugMode           bool   // Enable debug logging
 }
 
 // PRInfo represents PR information to be sent to Slack
@@ -262,6 +263,9 @@ func buildReportMessage(opts MessageOptions, sections []ReportSection) string {
 		// Mention team group
 		lines = append(lines, "")
 		lines = append(lines, fmt.Sprintf("<!subteam^%s> Please make sure to review these pull requests!", opts.TeamGroup))
+	} else if opts.PlainReviewReminder {
+		lines = append(lines, "")
+		lines = append(lines, "Please make sure to review these pull requests!")
 	}
 
 	return strings.Join(lines, "\n")

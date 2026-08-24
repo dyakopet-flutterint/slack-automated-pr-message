@@ -139,17 +139,18 @@ func main() {
 
 	// Build Slack message options
 	slackOpts := slack.MessageOptions{
-		Token:        os.Getenv("SLACK_TOKEN"),
-		Channel:      os.Getenv("MIDDLETIER_SLACK_CHANNEL"), // Use separate channel for middletier
-		GithubOwner:  owner,
-		GithubRepo:   repo,
-		JiraURL:      os.Getenv("JIRA_URL"),
-		TeamGroup:    os.Getenv("MIDDLETIER_TEAM_GROUP"), // Use separate team group for middletier
-		MentionUsers: os.Getenv("MIDDLETIER_MENTION_USERS"), // Comma-separated Slack user IDs to mention
-		ReportTitle:  "Middletier Report",
-		ShowAssignee: false, // Don't show assignee for middletier
-		UseCheckmark: false, // Use memo emoji instead of checkmark
-		DebugMode:    debugMode,
+		Token:               os.Getenv("SLACK_TOKEN"),
+		Channel:             os.Getenv("MIDDLETIER_SLACK_CHANNEL"), // Use separate channel for middletier
+		GithubOwner:         owner,
+		GithubRepo:          repo,
+		JiraURL:             os.Getenv("JIRA_URL"),
+		TeamGroup:           "",
+		MentionUsers:        "",
+		PlainReviewReminder: true,
+		ReportTitle:         "Middletier Report",
+		ShowAssignee:        false, // Don't show assignee for middletier
+		UseCheckmark:        false, // Use memo emoji instead of checkmark
+		DebugMode:           debugMode,
 	}
 
 	// Fallback to main SLACK_CHANNEL if MIDDLETIER_SLACK_CHANNEL not set
